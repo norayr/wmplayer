@@ -40,7 +40,7 @@ XpmIcon;
  /* Global variable */
 /*******************/
 
-Display *display;
+extern Display *display;
 
 /***********************/
  /* Function Prototypes */

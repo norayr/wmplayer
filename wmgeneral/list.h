@@ -29,12 +29,6 @@
 #ifndef __LIST_H_
 #define __LIST_H_
 
-#if defined(__GNUC__) && !defined(__STRICT_ANSI__)
-#define INLINE inline
-#else
-#define INLINE
-#endif
-
 typedef struct LinkedList
   {
     void *head;
@@ -42,20 +36,20 @@ typedef struct LinkedList
   }
 LinkedList;
 
-INLINE LinkedList *list_cons (void *head, LinkedList * tail);
+LinkedList *list_cons (void *head, LinkedList * tail);
 
-INLINE int list_length (LinkedList * list);
+int list_length (LinkedList * list);
 
-INLINE void *list_nth (int index, LinkedList * list);
+void *list_nth (int index, LinkedList * list);
 
-INLINE void list_remove_head (LinkedList ** list);
+void list_remove_head (LinkedList ** list);
 
-INLINE LinkedList *list_remove_elem (LinkedList * list, void *elem);
+LinkedList *list_remove_elem (LinkedList * list, void *elem);
 
-INLINE void list_mapcar (LinkedList * list, void (*function) (void *));
+void list_mapcar (LinkedList * list, void (*function) (void *));
 
-INLINE LinkedList *list_find (LinkedList * list, void *elem);
+LinkedList *list_find (LinkedList * list, void *elem);
 
-INLINE void list_free (LinkedList * list);
+void list_free (LinkedList * list);
 
 #endif

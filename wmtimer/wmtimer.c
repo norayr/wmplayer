@@ -128,7 +128,8 @@ int main(int argc, char *argv[])
     switch (mode)
     {
       case TIMER:
-	if (prevSec < thisTime->tm_sec) 
+	if (   (prevSec < thisTime->tm_sec) 
+        || ((prevSec == 59) && (thisTime->tm_sec == 0)))
 	{
 	  decrementTimer();
 	  updateACT();
@@ -138,7 +139,8 @@ int main(int argc, char *argv[])
 	prevSec = thisTime->tm_sec;
 	break;
       case CHRONO:
-	if (prevSec < thisTime->tm_sec)
+	if (   (prevSec < thisTime->tm_sec)
+        || ((prevSec == 59) && (thisTime->tm_sec == 0)))
 	{
 	  incrementTimer();
 	  updateACT();

@@ -67,6 +67,7 @@ Window iconwin, win;
 GC NormalGC;
 XpmIcon wmgen;
 Pixmap pixmask;
+Display *display;
 
 char *textColor = NULL;
 XpmColorSymbol colorSymbols[3] = { {"Text", NULL, 0} };
