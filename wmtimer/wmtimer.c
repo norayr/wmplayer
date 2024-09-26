@@ -393,7 +393,7 @@ void processEvent(XEvent *event)
   switch (buttonStatus)
   {
     case 0:          // center button
-      start_mplayer();
+      stop_mplayer();
       if (mode == ALARM)
       {
         hour = min = sec = 0;
@@ -415,7 +415,7 @@ void processEvent(XEvent *event)
       updateMain();
       break;
     case 2:          // right arrow button
-      stop_mplayer();
+      start_mplayer();
       if (mode == ALARM)
       {
         hour = min = sec = 0;
