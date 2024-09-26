@@ -31,6 +31,9 @@
 
 // Declare a file descriptor for the FIFO
 int fifo_fd = -1;
+int mplayer_running = 0; // Flag to track if mplayer is running
+
+
 
 typedef enum {NONE, ALARM, TIMER, TIMER_PAUSED, TIMER_DONE, CHRONO, CHRONO_PAUSED} modeType;
 typedef struct {int bell, command;} actionType;
@@ -89,6 +92,8 @@ configState configSt;
 *******************************************************************************/
 // Function to start mplayer in slave mode
 void start_mplayer() {
+  if (mplayer_running == 0)
+  {
     // Create the FIFO if it doesn't exist
     if (mkfifo(FIFO_PATH, 0666) == -1 && errno != EEXIST) {
         perror("Error creating FIFO");
@@ -107,15 +112,21 @@ void start_mplayer() {
     if (fifo_fd == -1) {
         perror("Error opening FIFO");
     }
+    mplayer_running = 1;
+  } // if mplayer_running
 }
 
 // Function to stop mplayer by sending the "quit" command via the FIFO
 void stop_mplayer() {
+  if (mplayer_running == 1)
+  {
     if (fifo_fd != -1) {
         write(fifo_fd, "quit\n", 5);  // Send quit command to mplayer
         close(fifo_fd);
         fifo_fd = -1;
     }
+    mplayer_running = 0;
+  }
 }
 
 
