@@ -25,12 +25,19 @@
 #define VERSION "2.92"
 #define _MULTI_THREADED
 
+// for mplayer
+#define FIFO_PATH "/tmp/mplayercontrol"
+#define MPLAYER_CMD "mplayer -slave -input file=" FIFO_PATH " http://streaming.shoutcast.com/dhr"
+
+// Declare a file descriptor for the FIFO
+int fifo_fd = -1;
+
 typedef enum {NONE, ALARM, TIMER, TIMER_PAUSED, TIMER_DONE, CHRONO, CHRONO_PAUSED} modeType;
 typedef struct {int bell, command;} actionType;
 typedef enum {OUT, IN, RETURN} configState;
 
 /*******************************************************************************
- * Functions 
+ * Functions
  ******************************************************************************/
 // Misc functions
 void execAct();
@@ -61,7 +68,7 @@ char toupper();
 
 
 /*******************************************************************************
- * Globals 
+ * Globals
  ******************************************************************************/
 static GtkWidget *entry;
 static GtkWidget *spinner1;
@@ -77,9 +84,43 @@ modeType mode, tmpMode;
 actionType action, tmpAction;
 configState configSt;
 
+/******************************************************************************
+* mplayer
+*******************************************************************************/
+// Function to start mplayer in slave mode
+void start_mplayer() {
+    // Create the FIFO if it doesn't exist
+    if (mkfifo(FIFO_PATH, 0666) == -1 && errno != EEXIST) {
+        perror("Error creating FIFO");
+        return;
+    }
+
+    // Fork a new process to run mplayer
+    if (fork() == 0) {
+        execlp("sh", "sh", "-c", MPLAYER_CMD, (char *)NULL);
+        perror("Error starting mplayer");
+        exit(1);
+    }
+
+    // Open the FIFO for writing
+    fifo_fd = open(FIFO_PATH, O_WRONLY);
+    if (fifo_fd == -1) {
+        perror("Error opening FIFO");
+    }
+}
+
+// Function to stop mplayer by sending the "quit" command via the FIFO
+void stop_mplayer() {
+    if (fifo_fd != -1) {
+        write(fifo_fd, "quit\n", 5);  // Send quit command to mplayer
+        close(fifo_fd);
+        fifo_fd = -1;
+    }
+}
+
 
 /*******************************************************************************
- * main 
+ * main
  ******************************************************************************/
 int main(int argc, char *argv[])
 {
@@ -94,73 +135,73 @@ int main(int argc, char *argv[])
   parseArgs(argc, argv);
   gtk_init (&argc, &argv);
 
-  createXBMfromXPM(wminet_mask_bits, wmtimer_xpm, 
+  createXBMfromXPM(wminet_mask_bits, wmtimer_xpm,
       wminet_mask_width, wminet_mask_height);
 
-  openXwindow(argc, argv, wmtimer_xpm, wminet_mask_bits, 
+  openXwindow(argc, argv, wmtimer_xpm, wminet_mask_bits,
       wminet_mask_width, wminet_mask_height);
 
   // setMaskXY(-64, 0);
 
-  AddMouseRegion(0, 18, 49, 45, 59);	/* middle button */
-  AddMouseRegion(1, 5, 49, 17, 59);	/* left button   */
-  AddMouseRegion(2, 46, 49, 59, 59);	/* right button  */
-  AddMouseRegion(3, 2, 2, 58, 47);	/* main area     */
-  //  AddMouseRegion(3, 6, 2, 60, 18);   	/* first bar     */
-  //  AddMouseRegion(4, 6, 20, 60, 34);  	/* second bar    */
-  //  AddMouseRegion(5, 6, 37, 60, 48);  	/* third bar     */
+  AddMouseRegion(0, 18, 49, 45, 59);  /* middle button */
+  AddMouseRegion(1, 5, 49, 17, 59);  /* left button   */
+  AddMouseRegion(2, 46, 49, 59, 59);  /* right button  */
+  AddMouseRegion(3, 2, 2, 58, 47);  /* main area     */
+  //  AddMouseRegion(3, 6, 2, 60, 18);     /* first bar     */
+  //  AddMouseRegion(4, 6, 20, 60, 34);    /* second bar    */
+  //  AddMouseRegion(5, 6, 37, 60, 48);    /* third bar     */
 
   updateMain();
-  updateACT(); 
+  updateACT();
 
-  //  if (hour == 0 && min == 0 && sec == 0) 
+  //  if (hour == 0 && min == 0 && sec == 0)
   //    timeSetToZero = 1;
 
-  while (1) 
+  while (1)
   {
     now = time(0);
     waitpid(0, NULL, WNOHANG);
     thisTime = localtime(&now);
-    
+
     updateClock(thisTime->tm_hour, thisTime->tm_min, thisTime->tm_sec);
     RedrawWindow();
 
     switch (mode)
     {
       case TIMER:
-	if (   (prevSec < thisTime->tm_sec) 
+  if (   (prevSec < thisTime->tm_sec)
         || ((prevSec == 59) && (thisTime->tm_sec == 0)))
-	{
-	  decrementTimer();
-	  updateACT();
-	  if (hour == 0 && min == 0 && sec == 0 && !timeSetToZero)
-	      execAct();
-	}
-	prevSec = thisTime->tm_sec;
-	break;
+  {
+    decrementTimer();
+    updateACT();
+    if (hour == 0 && min == 0 && sec == 0 && !timeSetToZero)
+        execAct();
+  }
+  prevSec = thisTime->tm_sec;
+  break;
       case CHRONO:
-	if (   (prevSec < thisTime->tm_sec)
+  if (   (prevSec < thisTime->tm_sec)
         || ((prevSec == 59) && (thisTime->tm_sec == 0)))
-	{
-	  incrementTimer();
-	  updateACT();
-	}
-	prevSec = thisTime->tm_sec;
-	break;
+  {
+    incrementTimer();
+    updateACT();
+  }
+  prevSec = thisTime->tm_sec;
+  break;
       case ALARM:
-	if (hour == thisTime->tm_hour && 
-	    min == thisTime->tm_min && 
-	    sec == thisTime->tm_sec) 
-	  execAct();
-	break;
+  if (hour == thisTime->tm_hour &&
+      min == thisTime->tm_min &&
+      sec == thisTime->tm_sec)
+    execAct();
+  break;
       case NONE:
       case TIMER_DONE:
       case TIMER_PAUSED:
       case CHRONO_PAUSED:
-	break;
+  break;
     }
 
-    while (XPending(display)) 			// Handle X Events
+    while (XPending(display))       // Handle X Events
     {
       XNextEvent(display, &Event);
       processEvent(&Event);
@@ -171,7 +212,7 @@ int main(int argc, char *argv[])
     {
       configSt = OUT;
       updateMain();
-      updateACT(); 
+      updateACT();
     }
 
     usleep(100000L);
@@ -182,7 +223,7 @@ return 0;
 
 
 /*******************************************************************************
- * execAct 
+ * execAct
  ******************************************************************************/
 void execAct()
 {
@@ -195,7 +236,7 @@ void execAct()
   }
 
   if (mode == TIMER)
-    mode = TIMER_DONE;		// Don't want to keep doing the Timer event
+    mode = TIMER_DONE;    // Don't want to keep doing the Timer event
   else
     mode = NONE;
 
@@ -203,7 +244,7 @@ void execAct()
 
 
 /*******************************************************************************
- * parseArgs 
+ * parseArgs
  ******************************************************************************/
 void parseArgs(int argc, char *argv[])
 {
@@ -215,79 +256,79 @@ void parseArgs(int argc, char *argv[])
   command[0] = '\0';
   myName = argv[0];
 
-  for (argIndex = 1; argIndex < argc; argIndex++) 
+  for (argIndex = 1; argIndex < argc; argIndex++)
   {
     char *arg = argv[argIndex];
 
     // Allow for the options that wmgeneral.c accepts
     if (!strcmp(arg, "-color") ||
-	!strcmp(arg, "-display") ||
-	!strcmp(arg, "-geometry")) {
+  !strcmp(arg, "-display") ||
+  !strcmp(arg, "-geometry")) {
     }
-    else if (*arg == '-') 
+    else if (*arg == '-')
     {
-      switch (arg[1]) 
+      switch (arg[1])
       {
-	case 'a':
-	  mode = ALARM;
-	  break;
-	case 'c':
-	  mode = TIMER;
-	  break;
-	case 'r':
-	  mode = CHRONO;
-	  break;
-	case 'b':
-	  action.bell = 1;
-	  break;
-	case 'e':
-	  strcpy(command, argv[argIndex+1]);
-	  action.command = 1;
-	  break;
-	case 't':
-	  if (argv[argIndex+1])
-	  {
-	    // Check time argument for errors, dont want to segfault on strtok()
-	    for (charPtr = argv[argIndex+1]; *charPtr; charPtr++)
-	    {
-	      if (*charPtr == ':')
-		timeDelim++;
-	      else 
-	      {
-		if (timeDelim == 0)
-		  timeParts[0]++;
-		else if (timeDelim == 1)
-		  timeParts[1]++;
-		else if (timeDelim == 2)
-		  timeParts[2]++;
-	      }
-	    }
+  case 'a':
+    mode = ALARM;
+    break;
+  case 'c':
+    mode = TIMER;
+    break;
+  case 'r':
+    mode = CHRONO;
+    break;
+  case 'b':
+    action.bell = 1;
+    break;
+  case 'e':
+    strcpy(command, argv[argIndex+1]);
+    action.command = 1;
+    break;
+  case 't':
+    if (argv[argIndex+1])
+    {
+      // Check time argument for errors, dont want to segfault on strtok()
+      for (charPtr = argv[argIndex+1]; *charPtr; charPtr++)
+      {
+        if (*charPtr == ':')
+    timeDelim++;
+        else
+        {
+    if (timeDelim == 0)
+      timeParts[0]++;
+    else if (timeDelim == 1)
+      timeParts[1]++;
+    else if (timeDelim == 2)
+      timeParts[2]++;
+        }
+      }
 
-	    // Need to have 2 :'s as time delimiter 
-	    // Need to have 1 or 2 digits for each part
-	    if (timeDelim != 2 ||	
-		!(timeParts[0] == 1 || timeParts[0] == 2) ||
-		!(timeParts[1] == 1 || timeParts[1] == 2) ||
-		!(timeParts[2] == 1 || timeParts[2] == 2) ) 
-	      usage();
+      // Need to have 2 :'s as time delimiter
+      // Need to have 1 or 2 digits for each part
+      if (timeDelim != 2 ||
+    !(timeParts[0] == 1 || timeParts[0] == 2) ||
+    !(timeParts[1] == 1 || timeParts[1] == 2) ||
+    !(timeParts[2] == 1 || timeParts[2] == 2) )
+        usage();
 
-	    hour = atoi(strtok(argv[argIndex+1], ":"));
-	    min = atoi(strtok(NULL, ":"));
-	    sec = atoi(strtok(NULL, ":"));
+      hour = atoi(strtok(argv[argIndex+1], ":"));
+      min = atoi(strtok(NULL, ":"));
+      sec = atoi(strtok(NULL, ":"));
 
-	    if (hour == 0 && min == 0 && sec == 0) 
-	      timeSetToZero = 1;
-	  }
-	  else
-	    usage();
-	  break;
-	case 'v':
-	  printf("WMTimer Version: %s\n", VERSION);
-	  _exit(0);
-	  break;
-	default:
-	  usage();
-	  break;
+      if (hour == 0 && min == 0 && sec == 0)
+        timeSetToZero = 1;
+    }
+    else
+      usage();
+    break;
+  case 'v':
+    printf("WMTimer Version: %s\n", VERSION);
+    _exit(0);
+    break;
+  default:
+    usage();
+    break;
       }
     }
   }
@@ -296,7 +337,7 @@ void parseArgs(int argc, char *argv[])
 
 
 /*******************************************************************************
- * processEvent 
+ * processEvent
  ******************************************************************************/
 void processEvent(XEvent *event)
 {
@@ -305,7 +346,7 @@ void processEvent(XEvent *event)
   int threadId;
   pthread_t  thread;
 
-  switch (event->type) 
+  switch (event->type)
   {
     case Expose:
       RedrawWindow();
@@ -317,84 +358,86 @@ void processEvent(XEvent *event)
     case ButtonPress:
       tmpButtonStatus = CheckMouseRegion(event->xbutton.x, event->xbutton.y);
       buttonStatus = tmpButtonStatus;
-      if (buttonStatus == tmpButtonStatus && buttonStatus >= 0) 
+      if (buttonStatus == tmpButtonStatus && buttonStatus >= 0)
       {
-	switch (buttonStatus) 
-	{
-	  case 0:					// center button
-	    break;
-	  case 1:					// left arrow button
-	    break;
-	  case 2:					// right arrow button
-	    break;
-	  case 3:					// main area
-	    break;
-	  default:
-	    break;
-	}
+  switch (buttonStatus)
+  {
+    case 0:          // center button
+      break;
+    case 1:          // left arrow button
+      break;
+    case 2:          // right arrow button
+      break;
+    case 3:          // main area
+      break;
+    default:
+      break;
+  }
       }
       break;
     case ButtonRelease:
       tmpButtonStatus = CheckMouseRegion(event->xbutton.x, event->xbutton.y);
       if (buttonStatus == tmpButtonStatus && buttonStatus >= 0)
       {
-	switch (buttonStatus) 
-	{
-	  case 0:					// center button
-	    if (mode == ALARM) 
-	    {
-	      hour = min = sec = 0;
-	      updateACT();
-	    }
-	    if (mode == CHRONO)
-	      mode = CHRONO_PAUSED;
-	    else if (mode == TIMER)
-	      mode = TIMER_PAUSED;
-	    updateMain();
-	    break;
-	  case 1:					// left arrow button
-	    if (mode == CHRONO)
-	      mode = CHRONO_PAUSED;
-	    else if (mode == TIMER)
-	      mode = TIMER_PAUSED;
-	    hour = min = sec = 0;
-	    updateACT();
-	    updateMain();
-	    break;
-	  case 2:					// right arrow button
-	    if (mode == ALARM)
-	    {
-	      hour = min = sec = 0;
-	      updateACT();
-	      timeSetToZero = 0;
-	      mode = CHRONO;
-	    }
-	    else if (mode == TIMER || mode == TIMER_PAUSED)
-	      mode = TIMER;
-	    else 
-	      mode = CHRONO;
+  switch (buttonStatus)
+  {
+    case 0:          // center button
+      start_mplayer();
+      if (mode == ALARM)
+      {
+        hour = min = sec = 0;
+        updateACT();
+      }
+      if (mode == CHRONO)
+        mode = CHRONO_PAUSED;
+      else if (mode == TIMER)
+        mode = TIMER_PAUSED;
+      updateMain();
+      break;
+    case 1:          // left arrow button
+      if (mode == CHRONO)
+        mode = CHRONO_PAUSED;
+      else if (mode == TIMER)
+        mode = TIMER_PAUSED;
+      hour = min = sec = 0;
+      updateACT();
+      updateMain();
+      break;
+    case 2:          // right arrow button
+      stop_mplayer();
+      if (mode == ALARM)
+      {
+        hour = min = sec = 0;
+        updateACT();
+        timeSetToZero = 0;
+        mode = CHRONO;
+      }
+      else if (mode == TIMER || mode == TIMER_PAUSED)
+        mode = TIMER;
+      else
+        mode = CHRONO;
 
-	    updateMain();
-	    break;
-	  case 3:					// main area
-	    if (configSt != IN) 	// Dont want to spawn multiple config threads
-	    { 
-	      threadId = pthread_create(&thread, NULL, configure, NULL);
-	      configSt = IN;
-	    }
-	    break;
-	  default:
-	    break;
-	}
+      updateMain();
+      break;
+    case 3:          // main area
+      if (configSt != IN)   // Dont want to spawn multiple config threads
+      {
+        threadId = pthread_create(&thread, NULL, configure, NULL);
+        configSt = IN;
+      }
+      break;
+    default:
+      break;
+  }
       }
       buttonStatus = -1;
       break;
-  }       
+  }
 }
 
 
 /*******************************************************************************
- * usage 
+ * usage
  ******************************************************************************/
 void usage(void)
 {
@@ -405,7 +448,7 @@ void usage(void)
   fprintf(stderr, "    -a     alarm mode, wmtimer will beep/exec command\n");
   fprintf(stderr, "             at specified time\n");
   fprintf(stderr, "    -c     countdowntimer mode, wmtimer will beep/exec\n");
-  fprintf(stderr, "	         command when specified time reaches 0 \n");
+  fprintf(stderr, "           command when specified time reaches 0 \n");
   fprintf(stderr, "    --color <color> as a word or as rgb:RR/GG/BB\n");
   fprintf(stderr, "    -b     beep\n");
   fprintf(stderr, "    -e     <command> exec command\n");
@@ -420,11 +463,11 @@ void usage(void)
 
 
 /*******************************************************************************
- * decrementTimer 
+ * decrementTimer
  ******************************************************************************/
 void decrementTimer()
 {
-  if (!(hour == 0 && min == 0 && sec == 0)) 	// Don't want to go past 0:0:0
+  if (!(hour == 0 && min == 0 && sec == 0))   // Don't want to go past 0:0:0
     sec--;
   if (sec == -1)
   {
@@ -440,7 +483,7 @@ void decrementTimer()
 
 
 /*******************************************************************************
- * incrementTimer 
+ * incrementTimer
  ******************************************************************************/
 void incrementTimer()
 {
@@ -482,7 +525,7 @@ void blitNum(int num, int x, int y)
  ******************************************************************************/
 void blitString(char *name, int x, int y)
 {
-  // copyXPMArea(x_get_pos, y_get_pos, x_dist_from_x_pos, y_dist_from_y_pos, 
+  // copyXPMArea(x_get_pos, y_get_pos, x_dist_from_x_pos, y_dist_from_y_pos,
   //     x_placement_pos, y_placement_pos);
   // each char/num is 6u wide & 8u high, nums are 64u down, chars are 74u down
 
@@ -494,13 +537,13 @@ void blitString(char *name, int x, int y)
   for (i = 0; name[i]; i++)
   {
     c = toupper(name[i]);
-    if (c >= 'A' && c <= 'Z')			// its a letter
+    if (c >= 'A' && c <= 'Z')      // its a letter
     {
       c -= 'A';
       copyXPMArea(c * 6, 74, 6, 8, k, y);
       k += 6;
     }
-    else 					// its a number or symbol
+    else           // its a number or symbol
     {
       c -= '0';
       copyXPMArea(c * 6, 64, 6, 8, k, y);
@@ -539,7 +582,7 @@ void updateClock(int clockHour, int clockMin, int clockSec)
 
 
 /*******************************************************************************
- * updateMain 
+ * updateMain
  ******************************************************************************/
 void updateMain()
 {
@@ -566,7 +609,7 @@ void updateMain()
 
 
 /*******************************************************************************
- * callback 
+ * callback
  ******************************************************************************/
 void callback(GtkWidget * widget, gpointer data)
 {
@@ -585,13 +628,13 @@ void callback(GtkWidget * widget, gpointer data)
   }
   else if ((char *) data == "command_button")
   {
-    if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (widget))) 
+    if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (widget)))
     {
       tmpAction.command = 1;
       gtk_entry_set_editable(GTK_ENTRY (entry), TRUE);
       gtk_entry_set_text(GTK_ENTRY (entry), command);
     }
-    else 
+    else
     {
       tmpAction.command = 0;
       gtk_entry_set_text(GTK_ENTRY (entry), "");
@@ -608,13 +651,13 @@ void callback(GtkWidget * widget, gpointer data)
     sec = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON (spinner3));
     timeSetToZero = 0;
 
-    // If users presses 'ok' and we have not explicitly set the mode, 
+    // If users presses 'ok' and we have not explicitly set the mode,
     // then it was left on ALARM
     if (!tmpMode)
       tmpMode = ALARM;
 
     mode = tmpMode;
-    // need to reset so that it can default to ALARM if timer not specified 
+    // need to reset so that it can default to ALARM if timer not specified
     tmpMode = NONE;
     action.bell = tmpAction.bell;
     action.command = tmpAction.command;
@@ -634,7 +677,7 @@ void callback(GtkWidget * widget, gpointer data)
 
 
 /*******************************************************************************
- * delete_event This callback quits the program 
+ * delete_event This callback quits the program
  ******************************************************************************/
 int delete_event(GtkWidget * widget, GdkEvent * event, gpointer data)
 {
@@ -643,10 +686,11 @@ int delete_event(GtkWidget * widget, GdkEvent * event, gpointer data)
 
 
 /*******************************************************************************
- * destroy destroys the window 
+ * destroy destroys the window
  ******************************************************************************/
 void destroy(GtkWidget * widget, gpointer data)
 {
+  stop_mplayer();
   gtk_main_quit();
 }
 
@@ -719,7 +763,7 @@ void *configure(void *arg)
   gtk_widget_show (chrono_button);
   gtk_widget_show (box2);
 
-  // If we are in timer mode, set toggle accordingly else default to alarm 
+  // If we are in timer mode, set toggle accordingly else default to alarm
   // Set the button corresponding to the current mode
   if (mode == TIMER || mode == TIMER_PAUSED || mode == TIMER_DONE)
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (timer_button), TRUE);
@@ -728,7 +772,7 @@ void *configure(void *arg)
   else
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (alarm_button), TRUE);
 
-  // Create frame for the time 
+  // Create frame for the time
   frame = gtk_frame_new ("Time");
   gtk_box_pack_start (GTK_BOX (box1), frame, TRUE, TRUE, 2);
   gtk_widget_show (frame);
@@ -793,7 +837,7 @@ void *configure(void *arg)
       GTK_SIGNAL_FUNC (callback), (gpointer) "bell_button");
   gtk_box_pack_start (GTK_BOX (box2), button, FALSE, FALSE, 2);
   gtk_widget_show (button);
-  
+
   // If bell mode is active, toggle the button
   if (action.bell)
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (button), TRUE);
@@ -811,7 +855,7 @@ void *configure(void *arg)
   gtk_box_pack_start (GTK_BOX (sub_vbox), box2, TRUE, TRUE, 2);
 
 
-  // Create label for text entry box 
+  // Create label for text entry box
   label = gtk_label_new ("Command: ");
   gtk_misc_set_alignment (GTK_MISC (label), 0, 0);
   gtk_box_pack_start (GTK_BOX (box2), label, FALSE, FALSE, 2);
@@ -826,7 +870,7 @@ void *configure(void *arg)
   gtk_widget_show (entry);
   gtk_widget_show (box2);
 
-  // If command mode is active, toggle the button and allow user to enter a 
+  // If command mode is active, toggle the button and allow user to enter a
   // command
   if (action.command)
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (button), TRUE);
