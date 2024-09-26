@@ -2,7 +2,7 @@ wmplayer by norayr chilingarian
 
 i modified wmtimer to play dhr radio for me via mplayer.
 
-to build, cd wmtimer and type make.
+to build, cd wmplayer and type make.
 
 
 WMTimer by Josh King <jking@dwave.net>
